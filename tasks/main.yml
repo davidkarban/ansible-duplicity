@@ -1,0 +1,81 @@
+---
+# tasks file for duplicity
+- name: Load the OS specific variables
+  tags: duplicity
+  include_vars: "{{ ansible_os_family }}.yml"
+
+- name: Install duplicity on RedHat like systems
+  tags: duplicity
+  yum: pkg={{ item }} state=present
+  with_items: duplicity_pkgs
+  when: ansible_os_family == 'RedHat'
+
+- name: Install duplicity on Debian like systems
+  tags: duplicity
+  apt: pkg={{ item }} state=present
+  with_items: duplicity_pkgs
+  when: ansible_os_family == 'Debian'
+
+- name: Ensure backup scripts are in place
+  tags: duplicity
+  template: src={{ item + '.j2'}} dest=/usr/local/sbin/{{ item }} owner=root group=root mode=0700
+  with_items:
+    - backup_daily.sh
+    - backup_report.sh
+    - backup_restore.sh
+
+#- name: Ensure duplicity tmp dir is available
+#  tags: duplicity
+#  file: path=/root/.cache/duplicity-tmp-{{ item.dir | replace('/', '_') }} state=directory owner=root group=root mode=0700
+#  with_items: duplicity_dirs
+
+- name: Install backup crontab file
+  tags: duplicity
+  template: src=backup.j2 dest=/etc/cron.d/backup owner=root group=root mode=0644
+
+- name: Install backup excludes file
+  tags: duplicity
+  template: src=backup_excludes.j2 dest=/usr/local/etc/{{ item.exclude_file }}
+  with_items: duplicity_dirs
+  when: item.exclude_file is defined  
+
+# Configure backup server
+- name: Create users on backup server
+  tags: duplicity
+  user: name={{duplicity_backup_user }} group=sftp-only shell=/bin/bash home=/srv/backup/{{ duplicity_backup_user }} createhome=yes generate_ssh_key=yes ssh_key_file=id_rsa_backup
+  delegate_to: "{{ duplicity_backup_server }}"
+
+- name: Fetch private key of backup user
+  tags: duplicity
+  fetch: src=/srv/backup/{{ duplicity_backup_user }}/id_rsa_backup dest=generated_keys/{{ duplicity_backup_user }} flat=yes fail_on_missing=yes
+  delegate_to: "{{ duplicity_backup_server }}"
+
+- name: Load private key to server
+  tags: duplicity
+  copy: src="{{ 'generated_keys/' + duplicity_backup_user }}" dest="/root/.ssh/id_rsa_backup_dupl" mode=0600
+
+- name: Ensure .ssh directory is present.
+  tags: duplicity
+  file: path=/srv/backup/{{ duplicity_backup_user }}/.ssh state=directory owner={{ duplicity_backup_user }} group="sftp-only" mode=0700
+  delegate_to: "{{ duplicity_backup_server }}"
+
+- name: Create authorized_keys on backup server.
+  tags: duplicity
+  command: cp /srv/backup/{{ duplicity_backup_user }}/id_rsa_backup.pub /srv/backup/{{ duplicity_backup_user }}/.ssh/authorized_keys creates=/srv/backup/{{ duplicity_backup_user }}/.ssh/authorized_keys
+  delegate_to: "{{ duplicity_backup_server }}"
+
+- name: Add backup key to known_hosts file
+  tags: duplicity
+  known_hosts: name={{ duplicity_backup_server }} key="{{ duplicity_backup_server + ' ' + 'ssh-rsa ' + hostvars[duplicity_backup_server]['ansible_ssh_host_key_rsa_public'] }}" state=present 
+
+- name: Ensure backup users have protected home directory
+  tags: duplicity
+  file: path=/srv/backup/{{ duplicity_backup_user }} state=directory owner=root group=root mode=0755
+  delegate_to: "{{ duplicity_backup_server }}"
+
+- name: Create backups directory for backups owned by user
+  tags: duplicity
+  file: path=/srv/backup/{{ duplicity_backup_user }}/backups state=directory owner={{ duplicity_backup_user }} group=sftp-only mode=0700
+  delegate_to: "{{ duplicity_backup_server }}"
+
+

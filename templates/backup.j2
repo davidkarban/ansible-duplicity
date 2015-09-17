@@ -1,0 +1,8 @@
+# {{ ansible_managed }}
+MAILTO="{{ duplicity_mailto }}"
+
+# backup database and after that do duplicity backup
+{% if automysqlbackup|default(false) %}05 3 * * *{% else %}15 23 * * *{% endif %}	root	/usr/local/sbin/backup_daily.sh
+
+# report o stavu zaloh jednou za tyden
+0 0 1 * *	root	/usr/local/sbin/backup_report.sh

@@ -1,0 +1,5 @@
+---
+duplicity_pkgs:
+  - duplicity
+  - python-paramiko
+

@@ -1,0 +1,10 @@
+- /root/.cache/duplicity/*
+- /tmp/duplicity_*
+{% if ansible_virtualization_type is defined and ansible_virtualization_type == "openvz" and ansible_virtualization_role == "host" %}
+- /dev
+- /vz/*
+- /var/lib/vz/*
+{% endif %}
+{% for exclude in item.excludes %}
+{{ '- ' + exclude }}
+{% endfor %}

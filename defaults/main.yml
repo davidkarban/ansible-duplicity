@@ -1,0 +1,25 @@
+---
+# defaults file for duplicity
+duplicity: true
+
+duplicity_fqdn: "{{ ansible_fqdn }}"
+duplicity_backup_user: "{{ (global_customer_shortcut + '_')|default('') }}{{ duplicity_fqdn }}"
+
+duplicity_backup_server: "ADD_YOUR_BACKUP_SERVER"
+duplicity_mailto: "root"
+
+duplicity_dirs:
+  - dir: "/"
+    exclude_file: "duplicity_excludes"
+    backup_server: "{{ duplicity_backup_server }}"
+    backup_dir: "backups"
+    user: "{{ (global_customer_shortcut + '_')|default('') }}{{ duplicity_fqdn }}"
+    ssh_key: /root/.ssh/id_rsa_backup_dupl
+    transport: sftp
+    excludes:
+      - /proc/*
+      - /sys/*
+      - /tmp/*
+      - /var/tmp/*
+      - /run/*
+

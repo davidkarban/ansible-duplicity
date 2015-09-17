@@ -1,0 +1,29 @@
+#!/bin/bash
+# {{ ansible_managed }}
+
+VERBOSITY="-v0"
+PASSPHRASE="{{ lookup('password', inventory_dir + '/credentials/' + duplicity_fqdn + '/duplicity_passphrase length=64') }}" export PASSPHRASE;
+
+{% if automysqlbackup|default(false) %}
+/usr/local/sbin/run_automysqlbackup.sh
+{% endif %}
+
+{% for backup in duplicity_dirs %}
+{% if backup.pre_script is defined %}
+{{ backup.pre_script }}
+{% endif %}
+{% if backup.transport == "sftp" %}
+# clean old backups
+/usr/bin/duplicity remove-older-than "28D" --volsize 256 --ssh-options "-oIdentityFile={{ backup.ssh_key }}" $VERBOSITY --force sftp://{{ backup.user }}@{{ backup.backup_server|default(duplicity_backup_server) }}/{{ backup.backup_dir }}/
+
+# cleanup of orphaned files
+/usr/bin/duplicity cleanup --volsize 256 --ssh-options "-oIdentityFile={{ backup.ssh_key }}" $VERBOSITY --force sftp://{{ backup.user }}@{{ backup.backup_server|default(duplicity_backup_server) }}/{{ backup.backup_dir }}/
+
+# backup
+/usr/bin/duplicity --volsize 256 --ssh-options "-oIdentityFile={{ backup.ssh_key }}" --full-if-older-than "28D" $VERBOSITY {% if backup.exclude_file is defined %}--exclude-globbing-filelist "/usr/local/etc/{{ backup.exclude_file }}"{% endif %} {{ backup.dir }} sftp://{{ backup.user }}@{{ backup.backup_server|default(duplicity_backup_server) }}/{{ backup.backup_dir }}/
+{% endif %}
+{% if backup.post_script is defined %}
+{{ backup.post_script }}
+{% endif %}
+{% endfor %}
+
